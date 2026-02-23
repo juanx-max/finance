@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MercadoPago - Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1117;
+    color: #e1e1e6;
+    padding: 24px;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 8px; }
+  .subtitle { color: #8b8b9a; font-size: 0.9rem; margin-bottom: 24px; }
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .kpi {
+    background: #1a1b23;
+    border: 1px solid #2a2b35;
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .kpi-label { color: #8b8b9a; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi-value { font-size: 1.8rem; font-weight: 700; margin-top: 4px; color: #fff; }
+  .kpi-value.green { color: #22c55e; }
+  .kpi-value.blue { color: #3b82f6; }
+  .kpi-value.purple { color: #a855f7; }
+  .kpi-value.amber { color: #f59e0b; }
+  .charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+  }
+  @media (max-width: 1024px) { .charts { grid-template-columns: 1fr; } }
+  .chart-card {
+    background: #1a1b23;
+    border: 1px solid #2a2b35;
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .chart-card h2 { font-size: 1rem; margin-bottom: 16px; }
+  .table-card {
+    background: #1a1b23;
+    border: 1px solid #2a2b35;
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .table-card h2 { font-size: 1rem; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; color: #8b8b9a; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 12px; border-bottom: 1px solid #2a2b35; }
+  td { padding: 10px 12px; border-bottom: 1px solid #1f2029; font-size: 0.9rem; }
+  tr:hover td { background: #1f2029; }
+  .right { text-align: right; }
+  .loading { color: #8b8b9a; padding: 40px; text-align: center; }
+  .error { color: #ef4444; padding: 20px; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>MercadoPago Analytics</h1>
+<p class="subtitle">Dashboard de transacciones - Datos en vivo desde Supabase</p>
+
+<div class="kpis">
+  <div class="kpi">
+    <div class="kpi-label">Total Facturado</div>
+    <div class="kpi-value green" id="kpi-total">-</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Transacciones</div>
+    <div class="kpi-value blue" id="kpi-txns">-</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Ticket Promedio</div>
+    <div class="kpi-value purple" id="kpi-avg">-</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Eventos Unicos</div>
+    <div class="kpi-value amber" id="kpi-events">-</div>
+  </div>
+</div>
+
+<div class="charts">
+  <div class="chart-card">
+    <h2>Flujo de Caja (acumulado)</h2>
+    <canvas id="cashFlowChart"></canvas>
+    <div class="loading" id="cf-loading">Cargando datos...</div>
+  </div>
+  <div class="chart-card">
+    <h2>Revenue Mensual</h2>
+    <canvas id="monthlyChart"></canvas>
+    <div class="loading" id="mt-loading">Cargando datos...</div>
+  </div>
+</div>
+
+<div class="charts">
+  <div class="chart-card">
+    <h2>Monto Diario Acreditado</h2>
+    <canvas id="dailyChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>Crecimiento Mensual (%)</h2>
+    <canvas id="growthChart"></canvas>
+  </div>
+</div>
+
+<div class="chart-card" style="margin-bottom: 32px;">
+  <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+    <h2 style="margin: 0;">Flujo de Caja por Evento</h2>
+    <select id="event-select" style="
+      background: #0f1117; color: #e1e1e6; border: 1px solid #2a2b35;
+      border-radius: 8px; padding: 8px 12px; font-size: 0.9rem; min-width: 300px;
+      cursor: pointer;
+    ">
+      <option value="">Selecciona un evento...</option>
+    </select>
+  </div>
+  <div class="kpis" id="event-kpis" style="display: none; margin-bottom: 20px;">
+    <div class="kpi">
+      <div class="kpi-label">Total Evento</div>
+      <div class="kpi-value green" id="ev-kpi-total">-</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Tickets</div>
+      <div class="kpi-value blue" id="ev-kpi-tickets">-</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Ticket Promedio</div>
+      <div class="kpi-value purple" id="ev-kpi-avg">-</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Dias de Venta</div>
+      <div class="kpi-value amber" id="ev-kpi-days">-</div>
+    </div>
+  </div>
+  <div class="charts" style="margin-bottom: 0;">
+    <div>
+      <h3 style="font-size: 0.85rem; color: #8b8b9a; margin-bottom: 8px;">Acumulado</h3>
+      <canvas id="eventCashFlowChart"></canvas>
+    </div>
+    <div>
+      <h3 style="font-size: 0.85rem; color: #8b8b9a; margin-bottom: 8px;">Monto Diario</h3>
+      <canvas id="eventDailyChart"></canvas>
+    </div>
+  </div>
+  <div class="loading" id="ev-loading" style="display: none;">Cargando datos del evento...</div>
+</div>
+
+<div class="table-card">
+  <h2>Top 20 Eventos por Facturacion</h2>
+  <div id="events-table"><div class="loading">Cargando datos...</div></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://hpvmxmlqzyzftarnukrr.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_OFbnyAKU1rPBN3lDqbAmbA_cwIsN_st';
+
+const headers = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': `Bearer ${SUPABASE_KEY}`,
+};
+
+function formatARS(n) {
+  if (n == null) return '-';
+  return '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function formatNum(n) {
+  if (n == null) return '-';
+  return Number(n).toLocaleString('es-AR');
+}
+
+async function query(endpoint) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, { headers });
+  if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+const chartColors = {
+  green: '#22c55e',
+  greenBg: 'rgba(34,197,94,0.15)',
+  blue: '#3b82f6',
+  blueBg: 'rgba(59,130,246,0.15)',
+  purple: '#a855f7',
+  amber: '#f59e0b',
+  red: '#ef4444',
+  redBg: 'rgba(239,68,68,0.15)',
+};
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: { legend: { labels: { color: '#8b8b9a', font: { size: 11 } } } },
+  scales: {
+    x: { ticks: { color: '#6b6b7a', font: { size: 10 } }, grid: { color: '#1f2029' } },
+    y: { ticks: { color: '#6b6b7a', font: { size: 10 } }, grid: { color: '#1f2029' } },
+  },
+};
+
+async function loadCashFlow() {
+  try {
+    const data = await query('v_cash_flow_calendar?select=*&order=fecha_acreditacion.asc');
+    document.getElementById('cf-loading').style.display = 'none';
+
+    const labels = data.map(r => r.fecha_acreditacion);
+    const acumulado = data.map(r => Number(r.acumulado));
+
+    new Chart(document.getElementById('cashFlowChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Acumulado',
+          data: acumulado,
+          borderColor: chartColors.green,
+          backgroundColor: chartColors.greenBg,
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        ...chartDefaults,
+        scales: {
+          ...chartDefaults.scales,
+          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } },
+        },
+      },
+    });
+
+    // Daily chart
+    const montos = data.map(r => Number(r.monto_del_dia));
+    new Chart(document.getElementById('dailyChart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Monto diario',
+          data: montos,
+          backgroundColor: chartColors.blueBg,
+          borderColor: chartColors.blue,
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        ...chartDefaults,
+        scales: {
+          ...chartDefaults.scales,
+          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } },
+        },
+      },
+    });
+
+  } catch (e) {
+    document.getElementById('cf-loading').innerHTML = `<span class="error">Error cargando flujo de caja: ${e.message}. Verifica que la vista v_cash_flow_calendar existe en Supabase.</span>`;
+  }
+}
+
+async function loadMonthly() {
+  try {
+    const data = await query('v_monthly_trends?select=*&order=mes.asc');
+    document.getElementById('mt-loading').style.display = 'none';
+
+    // KPIs from monthly totals
+    const totalRevenue = data.reduce((s, r) => s + Number(r.revenue_bruto || 0), 0);
+    const totalTxns = data.reduce((s, r) => s + Number(r.cantidad_transacciones || 0), 0);
+    const allEvents = data.reduce((s, r) => s + Number(r.eventos_unicos || 0), 0);
+    document.getElementById('kpi-total').textContent = formatARS(totalRevenue);
+    document.getElementById('kpi-txns').textContent = formatNum(totalTxns);
+    document.getElementById('kpi-avg').textContent = formatARS(totalRevenue / totalTxns);
+    document.getElementById('kpi-events').textContent = formatNum(allEvents);
+
+    const labels = data.map(r => {
+      const d = new Date(r.mes + 'T00:00:00');
+      return d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' });
+    });
+    const revenue = data.map(r => Number(r.revenue_bruto));
+
+    new Chart(document.getElementById('monthlyChart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Revenue Bruto',
+          data: revenue,
+          backgroundColor: chartColors.blueBg,
+          borderColor: chartColors.blue,
+          borderWidth: 1,
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        ...chartDefaults,
+        scales: {
+          ...chartDefaults.scales,
+          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } },
+        },
+      },
+    });
+
+    // Growth chart
+    const growth = data.map(r => r.crecimiento_pct != null ? Number(r.crecimiento_pct) : null);
+    new Chart(document.getElementById('growthChart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Crecimiento %',
+          data: growth,
+          backgroundColor: growth.map(v => v != null && v >= 0 ? chartColors.greenBg : chartColors.redBg),
+          borderColor: growth.map(v => v != null && v >= 0 ? chartColors.green : chartColors.red),
+          borderWidth: 1,
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        ...chartDefaults,
+        scales: {
+          ...chartDefaults.scales,
+          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => v + '%' } },
+        },
+      },
+    });
+
+  } catch (e) {
+    document.getElementById('mt-loading').innerHTML = `<span class="error">Error cargando tendencias: ${e.message}. Verifica que la vista v_monthly_trends existe en Supabase.</span>`;
+  }
+}
+
+async function loadTopEvents() {
+  try {
+    const sorted = await query('v_top_events?select=*&order=total_facturado.desc&limit=20');
+
+    let html = '<table><thead><tr><th>#</th><th>Evento</th><th class="right">Tickets</th><th class="right">Total Facturado</th><th class="right">Ticket Promedio</th></tr></thead><tbody>';
+    sorted.forEach((e, i) => {
+      html += `<tr>
+        <td>${i + 1}</td>
+        <td>${e.event_name}</td>
+        <td class="right">${formatNum(e.cantidad_tickets)}</td>
+        <td class="right">${formatARS(e.total_facturado)}</td>
+        <td class="right">${formatARS(e.ticket_promedio)}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+
+    document.getElementById('events-table').innerHTML = html;
+  } catch (e) {
+    document.getElementById('events-table').innerHTML = `<span class="error">Error: ${e.message}</span>`;
+  }
+}
+
+// --- Flujo de caja por evento ---
+let eventCashFlowChartInstance = null;
+let eventDailyChartInstance = null;
+
+async function populateEventSelector() {
+  try {
+    const events = await query('v_top_events?select=event_name,total_facturado&order=total_facturado.desc&limit=100');
+    const select = document.getElementById('event-select');
+    events.forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e.event_name;
+      opt.textContent = `${e.event_name} (${formatARS(e.total_facturado)})`;
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    console.error('Error cargando eventos:', e);
+  }
+}
+
+async function loadEventCashFlow(eventName) {
+  if (!eventName) {
+    document.getElementById('event-kpis').style.display = 'none';
+    if (eventCashFlowChartInstance) { eventCashFlowChartInstance.destroy(); eventCashFlowChartInstance = null; }
+    if (eventDailyChartInstance) { eventDailyChartInstance.destroy(); eventDailyChartInstance = null; }
+    return;
+  }
+
+  document.getElementById('ev-loading').style.display = 'block';
+
+  try {
+    const encoded = encodeURIComponent(eventName);
+    const data = await query(`v_cash_flow_by_event?event_name=eq.${encoded}&order=fecha_acreditacion.asc`);
+
+    document.getElementById('ev-loading').style.display = 'none';
+
+    if (!data.length) {
+      document.getElementById('event-kpis').style.display = 'none';
+      return;
+    }
+
+    // KPIs
+    const totalAmount = data.reduce((s, r) => s + Number(r.monto_del_dia), 0);
+    const totalTickets = data.reduce((s, r) => s + Number(r.cantidad_transacciones), 0);
+    document.getElementById('ev-kpi-total').textContent = formatARS(totalAmount);
+    document.getElementById('ev-kpi-tickets').textContent = formatNum(totalTickets);
+    document.getElementById('ev-kpi-avg').textContent = formatARS(totalAmount / totalTickets);
+    document.getElementById('ev-kpi-days').textContent = data.length;
+    document.getElementById('event-kpis').style.display = 'grid';
+
+    const labels = data.map(r => r.fecha_acreditacion);
+    const montos = data.map(r => Number(r.monto_del_dia));
+
+    // Compute cumulative
+    let cumulative = [];
+    let running = 0;
+    for (const m of montos) { running += m; cumulative.push(running); }
+
+    // Destroy old charts
+    if (eventCashFlowChartInstance) eventCashFlowChartInstance.destroy();
+    if (eventDailyChartInstance) eventDailyChartInstance.destroy();
+
+    eventCashFlowChartInstance = new Chart(document.getElementById('eventCashFlowChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Acumulado',
+          data: cumulative,
+          borderColor: chartColors.green,
+          backgroundColor: chartColors.greenBg,
+          fill: true,
+          tension: 0.3,
+          pointRadius: 1,
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        ...chartDefaults,
+        scales: {
+          ...chartDefaults.scales,
+          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } },
+        },
+      },
+    });
+
+    eventDailyChartInstance = new Chart(document.getElementById('eventDailyChart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Monto diario',
+          data: montos,
+          backgroundColor: chartColors.blueBg,
+          borderColor: chartColors.blue,
+          borderWidth: 1,
+          borderRadius: 2,
+        }],
+      },
+      options: {
+        ...chartDefaults,
+        scales: {
+          ...chartDefaults.scales,
+          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } },
+        },
+      },
+    });
+
+  } catch (e) {
+    document.getElementById('ev-loading').innerHTML = `<span class="error">Error: ${e.message}</span>`;
+  }
+}
+
+document.getElementById('event-select').addEventListener('change', (e) => {
+  loadEventCashFlow(e.target.value);
+});
+
+// Load all data in parallel
+loadCashFlow();
+loadMonthly();
+loadTopEvents();
+populateEventSelector();
+</script>
+</body>
+</html>
