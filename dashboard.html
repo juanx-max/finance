@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MercadoPago - Dashboard</title>
+<title>Ticketing Analytics - Dashboard Unificado</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -17,7 +17,7 @@
   .subtitle { color: #8b8b9a; font-size: 0.9rem; margin-bottom: 24px; }
   .kpis {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 16px;
     margin-bottom: 32px;
   }
@@ -29,10 +29,12 @@
   }
   .kpi-label { color: #8b8b9a; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
   .kpi-value { font-size: 1.8rem; font-weight: 700; margin-top: 4px; color: #fff; }
+  .kpi-sub { font-size: 0.75rem; color: #6b6b7a; margin-top: 2px; }
   .kpi-value.green { color: #22c55e; }
   .kpi-value.blue { color: #3b82f6; }
   .kpi-value.purple { color: #a855f7; }
   .kpi-value.amber { color: #f59e0b; }
+  .kpi-value.cyan { color: #06b6d4; }
   .charts {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -47,11 +49,13 @@
     padding: 20px;
   }
   .chart-card h2 { font-size: 1rem; margin-bottom: 16px; }
+  .chart-card.full { grid-column: 1 / -1; }
   .table-card {
     background: #1a1b23;
     border: 1px solid #2a2b35;
     border-radius: 12px;
     padding: 20px;
+    margin-bottom: 32px;
   }
   .table-card h2 { font-size: 1rem; margin-bottom: 16px; }
   table { width: 100%; border-collapse: collapse; }
@@ -61,32 +65,54 @@
   .right { text-align: right; }
   .loading { color: #8b8b9a; padding: 40px; text-align: center; }
   .error { color: #ef4444; padding: 20px; text-align: center; }
+  .select-styled {
+    background: #0f1117; color: #e1e1e6; border: 1px solid #2a2b35;
+    border-radius: 8px; padding: 8px 12px; font-size: 0.9rem; min-width: 300px;
+    cursor: pointer;
+  }
+  .section-header {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .section-header h2 { margin: 0; }
 </style>
 </head>
 <body>
 
-<h1>MercadoPago Analytics</h1>
-<p class="subtitle">Dashboard de transacciones - Datos en vivo desde Supabase</p>
+<h1>Ticketing Analytics</h1>
+<p class="subtitle">Dashboard unificado - Datos en vivo desde Supabase</p>
 
+<!-- KPIs principales -->
 <div class="kpis">
   <div class="kpi">
-    <div class="kpi-label">Total Facturado</div>
-    <div class="kpi-value green" id="kpi-total">-</div>
+    <div class="kpi-label">Costo Ticket</div>
+    <div class="kpi-value green" id="kpi-ticket">-</div>
+    <div class="kpi-sub" id="kpi-ticket-sub"></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Costo SC Neto</div>
+    <div class="kpi-value cyan" id="kpi-sc">-</div>
+    <div class="kpi-sub" id="kpi-sc-sub"></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Total Transaccion</div>
+    <div class="kpi-value blue" id="kpi-total">-</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Tickets Vendidos</div>
+    <div class="kpi-value purple" id="kpi-tickets">-</div>
   </div>
   <div class="kpi">
     <div class="kpi-label">Transacciones</div>
-    <div class="kpi-value blue" id="kpi-txns">-</div>
+    <div class="kpi-value amber" id="kpi-txns">-</div>
   </div>
   <div class="kpi">
-    <div class="kpi-label">Ticket Promedio</div>
-    <div class="kpi-value purple" id="kpi-avg">-</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-label">Eventos Unicos</div>
-    <div class="kpi-value amber" id="kpi-events">-</div>
+    <div class="kpi-label">Eventos / Productores</div>
+    <div class="kpi-value" id="kpi-counts">-</div>
   </div>
 </div>
 
+<!-- Charts row 1: Flujo de caja + Revenue mensual -->
 <div class="charts">
   <div class="chart-card">
     <h2>Flujo de Caja (acumulado)</h2>
@@ -100,44 +126,50 @@
   </div>
 </div>
 
+<!-- Charts row 2: Monto diario + Desglose mensual -->
 <div class="charts">
   <div class="chart-card">
-    <h2>Monto Diario Acreditado</h2>
+    <h2>Monto Diario</h2>
     <canvas id="dailyChart"></canvas>
   </div>
   <div class="chart-card">
-    <h2>Crecimiento Mensual (%)</h2>
-    <canvas id="growthChart"></canvas>
+    <h2>Desglose Mensual: Ticket vs SC</h2>
+    <canvas id="breakdownChart"></canvas>
   </div>
 </div>
 
+<!-- Detalle por evento -->
 <div class="chart-card" style="margin-bottom: 32px;">
-  <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
-    <h2 style="margin: 0;">Flujo de Caja por Evento</h2>
-    <select id="event-select" style="
-      background: #0f1117; color: #e1e1e6; border: 1px solid #2a2b35;
-      border-radius: 8px; padding: 8px 12px; font-size: 0.9rem; min-width: 300px;
-      cursor: pointer;
-    ">
+  <div class="section-header">
+    <h2>Detalle por Evento</h2>
+    <select id="event-select" class="select-styled">
       <option value="">Selecciona un evento...</option>
     </select>
   </div>
   <div class="kpis" id="event-kpis" style="display: none; margin-bottom: 20px;">
     <div class="kpi">
-      <div class="kpi-label">Total Evento</div>
-      <div class="kpi-value green" id="ev-kpi-total">-</div>
+      <div class="kpi-label">Costo Ticket</div>
+      <div class="kpi-value green" id="ev-kpi-ticket">-</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Costo SC</div>
+      <div class="kpi-value cyan" id="ev-kpi-sc">-</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Total Neto</div>
+      <div class="kpi-value blue" id="ev-kpi-total">-</div>
     </div>
     <div class="kpi">
       <div class="kpi-label">Tickets</div>
-      <div class="kpi-value blue" id="ev-kpi-tickets">-</div>
+      <div class="kpi-value purple" id="ev-kpi-tickets">-</div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">Ticket Promedio</div>
-      <div class="kpi-value purple" id="ev-kpi-avg">-</div>
+      <div class="kpi-label">Productor</div>
+      <div class="kpi-value" style="font-size:1rem;" id="ev-kpi-productor">-</div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">Dias de Venta</div>
-      <div class="kpi-value amber" id="ev-kpi-days">-</div>
+      <div class="kpi-label">Periodo</div>
+      <div class="kpi-value" style="font-size:0.9rem;" id="ev-kpi-periodo">-</div>
     </div>
   </div>
   <div class="charts" style="margin-bottom: 0;">
@@ -153,9 +185,16 @@
   <div class="loading" id="ev-loading" style="display: none;">Cargando datos del evento...</div>
 </div>
 
+<!-- Top Eventos -->
 <div class="table-card">
   <h2>Top 20 Eventos por Facturacion</h2>
   <div id="events-table"><div class="loading">Cargando datos...</div></div>
+</div>
+
+<!-- Top Productores -->
+<div class="table-card">
+  <h2>Top 20 Productores</h2>
+  <div id="productores-table"><div class="loading">Cargando datos...</div></div>
 </div>
 
 <script>
@@ -177,21 +216,24 @@ function formatNum(n) {
   return Number(n).toLocaleString('es-AR');
 }
 
+function formatDate(d) {
+  if (!d) return '-';
+  return new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 async function query(endpoint) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, { headers });
   if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
   return r.json();
 }
 
-const chartColors = {
-  green: '#22c55e',
-  greenBg: 'rgba(34,197,94,0.15)',
-  blue: '#3b82f6',
-  blueBg: 'rgba(59,130,246,0.15)',
-  purple: '#a855f7',
-  amber: '#f59e0b',
-  red: '#ef4444',
-  redBg: 'rgba(239,68,68,0.15)',
+const C = {
+  green: '#22c55e', greenBg: 'rgba(34,197,94,0.15)',
+  blue: '#3b82f6', blueBg: 'rgba(59,130,246,0.15)',
+  purple: '#a855f7', purpleBg: 'rgba(168,85,247,0.15)',
+  amber: '#f59e0b', amberBg: 'rgba(245,158,11,0.15)',
+  cyan: '#06b6d4', cyanBg: 'rgba(6,182,212,0.15)',
+  red: '#ef4444', redBg: 'rgba(239,68,68,0.15)',
 };
 
 const chartDefaults = {
@@ -204,13 +246,17 @@ const chartDefaults = {
   },
 };
 
+const arsScale = { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } };
+
+// ===================== CASH FLOW (v_unified_daily) =====================
 async function loadCashFlow() {
   try {
-    const data = await query('v_cash_flow_calendar?select=*&order=fecha_acreditacion.asc');
+    const data = await query('v_unified_daily?select=*&order=fecha.asc');
     document.getElementById('cf-loading').style.display = 'none';
 
-    const labels = data.map(r => r.fecha_acreditacion);
+    const labels = data.map(r => r.fecha);
     const acumulado = data.map(r => Number(r.acumulado));
+    const montos = data.map(r => Number(r.monto_dia));
 
     new Chart(document.getElementById('cashFlowChart'), {
       type: 'line',
@@ -219,25 +265,14 @@ async function loadCashFlow() {
         datasets: [{
           label: 'Acumulado',
           data: acumulado,
-          borderColor: chartColors.green,
-          backgroundColor: chartColors.greenBg,
-          fill: true,
-          tension: 0.3,
-          pointRadius: 0,
-          borderWidth: 2,
+          borderColor: C.green,
+          backgroundColor: C.greenBg,
+          fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
         }],
       },
-      options: {
-        ...chartDefaults,
-        scales: {
-          ...chartDefaults.scales,
-          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } },
-        },
-      },
+      options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: arsScale } },
     });
 
-    // Daily chart
-    const montos = data.map(r => Number(r.monto_del_dia));
     new Chart(document.getElementById('dailyChart'), {
       type: 'bar',
       data: {
@@ -245,142 +280,208 @@ async function loadCashFlow() {
         datasets: [{
           label: 'Monto diario',
           data: montos,
-          backgroundColor: chartColors.blueBg,
-          borderColor: chartColors.blue,
+          backgroundColor: C.blueBg,
+          borderColor: C.blue,
           borderWidth: 1,
         }],
       },
-      options: {
-        ...chartDefaults,
-        scales: {
-          ...chartDefaults.scales,
-          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } },
-        },
-      },
+      options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: arsScale } },
     });
 
   } catch (e) {
-    document.getElementById('cf-loading').innerHTML = `<span class="error">Error cargando flujo de caja: ${e.message}. Verifica que la vista v_cash_flow_calendar existe en Supabase.</span>`;
+    document.getElementById('cf-loading').innerHTML = `<span class="error">Error: ${e.message}</span>`;
   }
 }
 
+// ===================== MONTHLY (v_unified_monthly) =====================
 async function loadMonthly() {
   try {
-    const data = await query('v_monthly_trends?select=*&order=mes.asc');
+    const data = await query('v_unified_monthly?select=*&order=mes.asc');
     document.getElementById('mt-loading').style.display = 'none';
 
-    // KPIs from monthly totals
-    const totalRevenue = data.reduce((s, r) => s + Number(r.revenue_bruto || 0), 0);
-    const totalTxns = data.reduce((s, r) => s + Number(r.cantidad_transacciones || 0), 0);
-    const allEvents = data.reduce((s, r) => s + Number(r.eventos_unicos || 0), 0);
-    document.getElementById('kpi-total').textContent = formatARS(totalRevenue);
+    const totalTicketRev = data.reduce((s, r) => s + Number(r.revenue_tickets || 0), 0);
+    const totalSC = data.reduce((s, r) => s + Number(r.revenue_sc || 0), 0);
+    const totalRev = data.reduce((s, r) => s + Number(r.revenue_total || 0), 0);
+    const totalTxns = data.reduce((s, r) => s + Number(r.transacciones || 0), 0);
+    const totalTickets = data.reduce((s, r) => s + Number(r.tickets || 0), 0);
+
+    document.getElementById('kpi-ticket').textContent = formatARS(totalTicketRev);
+    document.getElementById('kpi-ticket-sub').textContent = `${(totalTicketRev / totalRev * 100).toFixed(1)}% del total`;
+    document.getElementById('kpi-sc').textContent = formatARS(totalSC);
+    document.getElementById('kpi-sc-sub').textContent = `${(totalSC / totalRev * 100).toFixed(1)}% del total`;
+    document.getElementById('kpi-total').textContent = formatARS(totalRev);
+    document.getElementById('kpi-tickets').textContent = formatNum(totalTickets);
     document.getElementById('kpi-txns').textContent = formatNum(totalTxns);
-    document.getElementById('kpi-avg').textContent = formatARS(totalRevenue / totalTxns);
-    document.getElementById('kpi-events').textContent = formatNum(allEvents);
 
     const labels = data.map(r => {
       const d = new Date(r.mes + 'T00:00:00');
       return d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' });
     });
-    const revenue = data.map(r => Number(r.revenue_bruto));
 
+    // Revenue mensual stacked
     new Chart(document.getElementById('monthlyChart'), {
       type: 'bar',
       data: {
         labels,
-        datasets: [{
-          label: 'Revenue Bruto',
-          data: revenue,
-          backgroundColor: chartColors.blueBg,
-          borderColor: chartColors.blue,
-          borderWidth: 1,
-          borderRadius: 4,
-        }],
+        datasets: [
+          {
+            label: 'Costo Ticket',
+            data: data.map(r => Number(r.revenue_tickets)),
+            backgroundColor: C.greenBg,
+            borderColor: C.green,
+            borderWidth: 1, borderRadius: 4,
+          },
+          {
+            label: 'Costo SC',
+            data: data.map(r => Number(r.revenue_sc)),
+            backgroundColor: C.cyanBg,
+            borderColor: C.cyan,
+            borderWidth: 1, borderRadius: 4,
+          },
+        ],
       },
       options: {
         ...chartDefaults,
+        plugins: { ...chartDefaults.plugins, },
         scales: {
           ...chartDefaults.scales,
-          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } },
+          x: { ...chartDefaults.scales.x, stacked: true },
+          y: { ...arsScale, stacked: true },
         },
       },
     });
 
-    // Growth chart
-    const growth = data.map(r => r.crecimiento_pct != null ? Number(r.crecimiento_pct) : null);
-    new Chart(document.getElementById('growthChart'), {
+    // Breakdown chart: % ticket vs SC por mes
+    new Chart(document.getElementById('breakdownChart'), {
       type: 'bar',
       data: {
         labels,
-        datasets: [{
-          label: 'Crecimiento %',
-          data: growth,
-          backgroundColor: growth.map(v => v != null && v >= 0 ? chartColors.greenBg : chartColors.redBg),
-          borderColor: growth.map(v => v != null && v >= 0 ? chartColors.green : chartColors.red),
-          borderWidth: 1,
-          borderRadius: 4,
-        }],
+        datasets: [
+          {
+            label: 'Costo Ticket',
+            data: data.map(r => Number(r.revenue_tickets)),
+            backgroundColor: C.green,
+            borderRadius: 4,
+          },
+          {
+            label: 'Costo SC Neto',
+            data: data.map(r => Number(r.revenue_sc)),
+            backgroundColor: C.cyan,
+            borderRadius: 4,
+          },
+        ],
       },
       options: {
         ...chartDefaults,
+        plugins: {
+          ...chartDefaults.plugins,
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ${formatARS(ctx.raw)}`,
+            }
+          }
+        },
         scales: {
           ...chartDefaults.scales,
-          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => v + '%' } },
+          x: { ...chartDefaults.scales.x, stacked: true },
+          y: { ...arsScale, stacked: true },
         },
       },
     });
 
   } catch (e) {
-    document.getElementById('mt-loading').innerHTML = `<span class="error">Error cargando tendencias: ${e.message}. Verifica que la vista v_monthly_trends existe en Supabase.</span>`;
+    document.getElementById('mt-loading').innerHTML = `<span class="error">Error: ${e.message}</span>`;
   }
 }
 
+// ===================== TOP EVENTOS (v_unified_by_evento) =====================
+let allEventos = [];
+
 async function loadTopEvents() {
   try {
-    const sorted = await query('v_top_events?select=*&order=total_facturado.desc&limit=20');
+    allEventos = await query('v_unified_by_evento?select=*&order=total_neto.desc&limit=100');
 
-    let html = '<table><thead><tr><th>#</th><th>Evento</th><th class="right">Tickets</th><th class="right">Total Facturado</th><th class="right">Ticket Promedio</th></tr></thead><tbody>';
-    sorted.forEach((e, i) => {
+    // KPI: eventos y productores
+    const eventosAll = await query('v_unified_by_evento?select=evento&limit=1000');
+    const productoresAll = await query('v_unified_by_productor?select=productor&limit=1000');
+    document.getElementById('kpi-counts').textContent = `${formatNum(eventosAll.length)} / ${formatNum(productoresAll.length)}`;
+
+    // Tabla top 20
+    const top20 = allEventos.slice(0, 20);
+    let html = `<table><thead><tr>
+      <th>#</th><th>Evento</th><th>Productor</th>
+      <th class="right">Tickets</th>
+      <th class="right">Costo Ticket</th>
+      <th class="right">Costo SC</th>
+      <th class="right">Total Neto</th>
+    </tr></thead><tbody>`;
+    top20.forEach((e, i) => {
       html += `<tr>
         <td>${i + 1}</td>
-        <td>${e.event_name}</td>
-        <td class="right">${formatNum(e.cantidad_tickets)}</td>
-        <td class="right">${formatARS(e.total_facturado)}</td>
-        <td class="right">${formatARS(e.ticket_promedio)}</td>
+        <td>${e.evento}</td>
+        <td style="color:#8b8b9a">${e.productor}</td>
+        <td class="right">${formatNum(e.total_tickets)}</td>
+        <td class="right">${formatARS(e.total_costo_ticket)}</td>
+        <td class="right">${formatARS(e.total_costo_sc)}</td>
+        <td class="right">${formatARS(e.total_neto)}</td>
       </tr>`;
     });
     html += '</tbody></table>';
-
     document.getElementById('events-table').innerHTML = html;
+
+    // Populate event selector
+    const select = document.getElementById('event-select');
+    allEventos.forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e.evento;
+      opt.textContent = `${e.evento} (${formatARS(e.total_neto)})`;
+      select.appendChild(opt);
+    });
+
   } catch (e) {
     document.getElementById('events-table').innerHTML = `<span class="error">Error: ${e.message}</span>`;
   }
 }
 
-// --- Flujo de caja por evento ---
-let eventCashFlowChartInstance = null;
-let eventDailyChartInstance = null;
-
-async function populateEventSelector() {
+// ===================== TOP PRODUCTORES (v_unified_by_productor) =====================
+async function loadTopProductores() {
   try {
-    const events = await query('v_top_events?select=event_name,total_facturado&order=total_facturado.desc&limit=100');
-    const select = document.getElementById('event-select');
-    events.forEach(e => {
-      const opt = document.createElement('option');
-      opt.value = e.event_name;
-      opt.textContent = `${e.event_name} (${formatARS(e.total_facturado)})`;
-      select.appendChild(opt);
+    const data = await query('v_unified_by_productor?select=*&order=total_neto.desc&limit=20');
+    let html = `<table><thead><tr>
+      <th>#</th><th>Productor</th>
+      <th class="right">Tickets</th>
+      <th class="right">Costo Ticket</th>
+      <th class="right">Costo SC</th>
+      <th class="right">Total Neto</th>
+      <th class="right">Avg Txn</th>
+    </tr></thead><tbody>`;
+    data.forEach((p, i) => {
+      html += `<tr>
+        <td>${i + 1}</td>
+        <td>${p.productor}</td>
+        <td class="right">${formatNum(p.total_tickets)}</td>
+        <td class="right">${formatARS(p.total_costo_ticket)}</td>
+        <td class="right">${formatARS(p.total_costo_sc)}</td>
+        <td class="right">${formatARS(p.total_neto)}</td>
+        <td class="right">${formatARS(p.avg_transaccion)}</td>
+      </tr>`;
     });
+    html += '</tbody></table>';
+    document.getElementById('productores-table').innerHTML = html;
   } catch (e) {
-    console.error('Error cargando eventos:', e);
+    document.getElementById('productores-table').innerHTML = `<span class="error">Error: ${e.message}</span>`;
   }
 }
 
-async function loadEventCashFlow(eventName) {
+// ===================== DETALLE POR EVENTO =====================
+let evCashChart = null;
+let evDailyChart = null;
+
+async function loadEventDetail(eventName) {
   if (!eventName) {
     document.getElementById('event-kpis').style.display = 'none';
-    if (eventCashFlowChartInstance) { eventCashFlowChartInstance.destroy(); eventCashFlowChartInstance = null; }
-    if (eventDailyChartInstance) { eventDailyChartInstance.destroy(); eventDailyChartInstance = null; }
+    if (evCashChart) { evCashChart.destroy(); evCashChart = null; }
+    if (evDailyChart) { evDailyChart.destroy(); evDailyChart = null; }
     return;
   }
 
@@ -388,80 +489,81 @@ async function loadEventCashFlow(eventName) {
 
   try {
     const encoded = encodeURIComponent(eventName);
-    const data = await query(`v_cash_flow_by_event?event_name=eq.${encoded}&order=fecha_acreditacion.asc`);
+
+    // Get event summary from allEventos
+    const evInfo = allEventos.find(e => e.evento === eventName);
+
+    // Get daily data directly from the table
+    const data = await query(
+      `unified_transactions?select=transaction_datetime,costo_ticket,costo_sc,total_transaccion,ticket_count` +
+      `&evento=eq.${encoded}&order=transaction_datetime.asc`
+    );
 
     document.getElementById('ev-loading').style.display = 'none';
-
     if (!data.length) {
       document.getElementById('event-kpis').style.display = 'none';
       return;
     }
 
-    // KPIs
-    const totalAmount = data.reduce((s, r) => s + Number(r.monto_del_dia), 0);
-    const totalTickets = data.reduce((s, r) => s + Number(r.cantidad_transacciones), 0);
-    document.getElementById('ev-kpi-total').textContent = formatARS(totalAmount);
-    document.getElementById('ev-kpi-tickets').textContent = formatNum(totalTickets);
-    document.getElementById('ev-kpi-avg').textContent = formatARS(totalAmount / totalTickets);
-    document.getElementById('ev-kpi-days').textContent = data.length;
-    document.getElementById('event-kpis').style.display = 'grid';
+    // Aggregate by day
+    const byDay = {};
+    data.forEach(r => {
+      const day = r.transaction_datetime.substring(0, 10);
+      if (!byDay[day]) byDay[day] = { ticket: 0, sc: 0, total: 0, tickets: 0 };
+      byDay[day].ticket += Number(r.costo_ticket);
+      byDay[day].sc += Number(r.costo_sc);
+      byDay[day].total += Number(r.total_transaccion);
+      byDay[day].tickets += Number(r.ticket_count);
+    });
 
-    const labels = data.map(r => r.fecha_acreditacion);
-    const montos = data.map(r => Number(r.monto_del_dia));
-
-    // Compute cumulative
+    const days = Object.keys(byDay).sort();
+    const dailyTotals = days.map(d => byDay[d].total);
     let cumulative = [];
     let running = 0;
-    for (const m of montos) { running += m; cumulative.push(running); }
+    for (const m of dailyTotals) { running += m; cumulative.push(running); }
 
-    // Destroy old charts
-    if (eventCashFlowChartInstance) eventCashFlowChartInstance.destroy();
-    if (eventDailyChartInstance) eventDailyChartInstance.destroy();
+    // KPIs
+    if (evInfo) {
+      document.getElementById('ev-kpi-ticket').textContent = formatARS(evInfo.total_costo_ticket);
+      document.getElementById('ev-kpi-sc').textContent = formatARS(evInfo.total_costo_sc);
+      document.getElementById('ev-kpi-total').textContent = formatARS(evInfo.total_neto);
+      document.getElementById('ev-kpi-tickets').textContent = formatNum(evInfo.total_tickets);
+      document.getElementById('ev-kpi-productor').textContent = evInfo.productor;
+      document.getElementById('ev-kpi-periodo').textContent =
+        `${formatDate(evInfo.primera_venta)} - ${formatDate(evInfo.ultima_venta)}`;
+    }
+    document.getElementById('event-kpis').style.display = 'grid';
 
-    eventCashFlowChartInstance = new Chart(document.getElementById('eventCashFlowChart'), {
+    // Charts
+    if (evCashChart) evCashChart.destroy();
+    if (evDailyChart) evDailyChart.destroy();
+
+    evCashChart = new Chart(document.getElementById('eventCashFlowChart'), {
       type: 'line',
       data: {
-        labels,
+        labels: days,
         datasets: [{
           label: 'Acumulado',
           data: cumulative,
-          borderColor: chartColors.green,
-          backgroundColor: chartColors.greenBg,
-          fill: true,
-          tension: 0.3,
-          pointRadius: 1,
-          borderWidth: 2,
+          borderColor: C.green, backgroundColor: C.greenBg,
+          fill: true, tension: 0.3, pointRadius: 1, borderWidth: 2,
         }],
       },
-      options: {
-        ...chartDefaults,
-        scales: {
-          ...chartDefaults.scales,
-          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } },
-        },
-      },
+      options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: arsScale } },
     });
 
-    eventDailyChartInstance = new Chart(document.getElementById('eventDailyChart'), {
+    evDailyChart = new Chart(document.getElementById('eventDailyChart'), {
       type: 'bar',
       data: {
-        labels,
+        labels: days,
         datasets: [{
           label: 'Monto diario',
-          data: montos,
-          backgroundColor: chartColors.blueBg,
-          borderColor: chartColors.blue,
-          borderWidth: 1,
-          borderRadius: 2,
+          data: dailyTotals,
+          backgroundColor: C.blueBg, borderColor: C.blue,
+          borderWidth: 1, borderRadius: 2,
         }],
       },
-      options: {
-        ...chartDefaults,
-        scales: {
-          ...chartDefaults.scales,
-          y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } },
-        },
-      },
+      options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: arsScale } },
     });
 
   } catch (e) {
@@ -470,14 +572,14 @@ async function loadEventCashFlow(eventName) {
 }
 
 document.getElementById('event-select').addEventListener('change', (e) => {
-  loadEventCashFlow(e.target.value);
+  loadEventDetail(e.target.value);
 });
 
-// Load all data in parallel
+// Load all in parallel
 loadCashFlow();
 loadMonthly();
 loadTopEvents();
-populateEventSelector();
+loadTopProductores();
 </script>
 </body>
 </html>
