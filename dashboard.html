@@ -35,6 +35,7 @@
   .kpi-value.purple { color: #a855f7; }
   .kpi-value.amber { color: #f59e0b; }
   .kpi-value.cyan { color: #06b6d4; }
+  .kpi-value.red { color: #ef4444; }
   .charts {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -75,6 +76,17 @@
     margin-bottom: 16px; flex-wrap: wrap;
   }
   .section-header h2 { margin: 0; }
+  .divider {
+    border: none;
+    border-top: 1px solid #2a2b35;
+    margin: 40px 0 32px;
+  }
+  .section-title {
+    font-size: 1.3rem;
+    margin-bottom: 24px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #2a2b35;
+  }
 </style>
 </head>
 <body>
@@ -82,7 +94,51 @@
 <h1>Ticketing Analytics</h1>
 <p class="subtitle">Dashboard unificado - Datos en vivo desde Supabase</p>
 
-<!-- KPIs principales -->
+<!-- ==================== SECCION: BALANCE DE CAJA ==================== -->
+<h2 class="section-title">Balance de Caja</h2>
+
+<div class="kpis">
+  <div class="kpi">
+    <div class="kpi-label">Balance Actual</div>
+    <div class="kpi-value green" id="kpi-balance">-</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Total Ingresos</div>
+    <div class="kpi-value blue" id="kpi-ingresos">-</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Total Payouts</div>
+    <div class="kpi-value red" id="kpi-payouts">-</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Refunds + Chargebacks</div>
+    <div class="kpi-value amber" id="kpi-refunds">-</div>
+  </div>
+</div>
+
+<div class="charts">
+  <div class="chart-card">
+    <h2>Balance Acumulado</h2>
+    <canvas id="balanceChart"></canvas>
+    <div class="loading" id="bal-loading">Cargando datos...</div>
+  </div>
+  <div class="chart-card">
+    <h2>Flujo Mensual: Ingresos vs Egresos</h2>
+    <canvas id="flowChart"></canvas>
+  </div>
+</div>
+
+<!-- Tabla balance mensual -->
+<div class="table-card">
+  <h2>Balance Mensual Detallado</h2>
+  <div id="balance-table"><div class="loading">Cargando datos...</div></div>
+</div>
+
+<hr class="divider">
+
+<!-- ==================== SECCION: VENTAS ==================== -->
+<h2 class="section-title">Ventas</h2>
+
 <div class="kpis">
   <div class="kpi">
     <div class="kpi-label">Costo Ticket</div>
@@ -112,10 +168,9 @@
   </div>
 </div>
 
-<!-- Charts row 1: Flujo de caja + Revenue mensual -->
 <div class="charts">
   <div class="chart-card">
-    <h2>Flujo de Caja (acumulado)</h2>
+    <h2>Ingresos Acumulados (ventas)</h2>
     <canvas id="cashFlowChart"></canvas>
     <div class="loading" id="cf-loading">Cargando datos...</div>
   </div>
@@ -126,10 +181,9 @@
   </div>
 </div>
 
-<!-- Charts row 2: Monto diario + Desglose mensual -->
 <div class="charts">
   <div class="chart-card">
-    <h2>Monto Diario</h2>
+    <h2>Monto Diario (ventas)</h2>
     <canvas id="dailyChart"></canvas>
   </div>
   <div class="chart-card">
@@ -197,6 +251,49 @@
   <div id="productores-table"><div class="loading">Cargando datos...</div></div>
 </div>
 
+<hr class="divider">
+
+<!-- ==================== SECCION: RENDICION DE TRANSFERENCIAS ==================== -->
+<h2 class="section-title">Rendicion de Transferencias</h2>
+
+<div class="kpis">
+  <div class="kpi">
+    <div class="kpi-label">Total Transferido</div>
+    <div class="kpi-value red" id="ren-kpi-total">-</div>
+    <div class="kpi-sub" id="ren-kpi-total-sub"></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Transferencias</div>
+    <div class="kpi-value amber" id="ren-kpi-count">-</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Beneficiarios</div>
+    <div class="kpi-value purple" id="ren-kpi-beneficiarios">-</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Eventos Cubiertos</div>
+    <div class="kpi-value cyan" id="ren-kpi-eventos">-</div>
+  </div>
+</div>
+
+<div class="charts">
+  <div class="chart-card full">
+    <h2>Transferencias por Mes</h2>
+    <div class="loading" id="ren-loading">Cargando datos...</div>
+    <canvas id="renMonthlyChart"></canvas>
+  </div>
+</div>
+
+<div class="table-card">
+  <h2>Por Beneficiario</h2>
+  <div id="ren-beneficiarios-table"><div class="loading">Cargando datos...</div></div>
+</div>
+
+<div class="table-card">
+  <h2>Por Evento</h2>
+  <div id="ren-eventos-table"><div class="loading">Cargando datos...</div></div>
+</div>
+
 <script>
 const SUPABASE_URL = 'https://hpvmxmlqzyzftarnukrr.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_OFbnyAKU1rPBN3lDqbAmbA_cwIsN_st';
@@ -219,6 +316,11 @@ function formatNum(n) {
 function formatDate(d) {
   if (!d) return '-';
   return new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function formatMonth(mes) {
+  const d = new Date(mes + 'T00:00:00');
+  return d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' });
 }
 
 async function query(endpoint) {
@@ -248,7 +350,108 @@ const chartDefaults = {
 
 const arsScale = { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => formatARS(v) } };
 
-// ===================== CASH FLOW (v_unified_daily) =====================
+// ===================== BALANCE DE CAJA (v_balance_monthly) =====================
+async function loadBalance() {
+  try {
+    const data = await query('v_balance_monthly?select=*&order=mes.asc');
+    document.getElementById('bal-loading').style.display = 'none';
+
+    const totalIngresos = data.reduce((s, r) => s + Number(r.ingresos || 0), 0);
+    const totalPayouts = data.reduce((s, r) => s + Number(r.payouts || 0), 0);
+    const totalRefunds = data.reduce((s, r) => s + Number(r.refunds || 0), 0);
+    const totalCB = data.reduce((s, r) => s + Number(r.chargebacks || 0), 0);
+    const balanceActual = data.length ? Number(data[data.length - 1].balance) : 0;
+
+    document.getElementById('kpi-balance').textContent = formatARS(balanceActual);
+    document.getElementById('kpi-ingresos').textContent = formatARS(totalIngresos);
+    document.getElementById('kpi-payouts').textContent = formatARS(totalPayouts);
+    document.getElementById('kpi-refunds').textContent = formatARS(totalRefunds + totalCB);
+
+    const labels = data.map(r => formatMonth(r.mes));
+
+    // Balance acumulado
+    new Chart(document.getElementById('balanceChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Balance',
+          data: data.map(r => Number(r.balance)),
+          borderColor: C.green,
+          backgroundColor: C.greenBg,
+          fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2,
+        }],
+      },
+      options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: arsScale } },
+    });
+
+    // Flujo mensual: ingresos vs egresos
+    new Chart(document.getElementById('flowChart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Ingresos',
+            data: data.map(r => Number(r.ingresos || 0)),
+            backgroundColor: C.greenBg,
+            borderColor: C.green,
+            borderWidth: 1, borderRadius: 4,
+          },
+          {
+            label: 'Payouts',
+            data: data.map(r => Number(r.payouts || 0)),
+            backgroundColor: C.redBg,
+            borderColor: C.red,
+            borderWidth: 1, borderRadius: 4,
+          },
+          {
+            label: 'Refunds/CB',
+            data: data.map(r => (Number(r.refunds || 0) + Number(r.chargebacks || 0))),
+            backgroundColor: C.amberBg,
+            borderColor: C.amber,
+            borderWidth: 1, borderRadius: 4,
+          },
+        ],
+      },
+      options: {
+        ...chartDefaults,
+        scales: { ...chartDefaults.scales, y: arsScale },
+      },
+    });
+
+    // Tabla balance mensual
+    let html = `<table><thead><tr>
+      <th>Mes</th>
+      <th class="right">Ingresos</th>
+      <th class="right">Payouts</th>
+      <th class="right">Refunds</th>
+      <th class="right">CB</th>
+      <th class="right">Neto Mes</th>
+      <th class="right">Balance</th>
+    </tr></thead><tbody>`;
+    data.forEach(r => {
+      const bal = Number(r.balance);
+      const balColor = bal >= 0 ? 'color:#22c55e' : 'color:#ef4444';
+      html += `<tr>
+        <td>${formatMonth(r.mes)}</td>
+        <td class="right">${formatARS(r.ingresos)}</td>
+        <td class="right" style="color:#ef4444">${formatARS(r.payouts)}</td>
+        <td class="right" style="color:#f59e0b">${formatARS(r.refunds)}</td>
+        <td class="right" style="color:#f59e0b">${formatARS(r.chargebacks)}</td>
+        <td class="right">${formatARS(r.neto_mes)}</td>
+        <td class="right" style="${balColor};font-weight:700">${formatARS(bal)}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('balance-table').innerHTML = html;
+
+  } catch (e) {
+    document.getElementById('bal-loading').innerHTML = `<span class="error">Error: ${e.message}</span>`;
+  }
+}
+
+// ===================== CASH FLOW VENTAS (v_unified_daily) =====================
 async function loadCashFlow() {
   try {
     const data = await query('v_unified_daily?select=*&order=fecha.asc');
@@ -265,8 +468,7 @@ async function loadCashFlow() {
         datasets: [{
           label: 'Acumulado',
           data: acumulado,
-          borderColor: C.green,
-          backgroundColor: C.greenBg,
+          borderColor: C.green, backgroundColor: C.greenBg,
           fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
         }],
       },
@@ -280,9 +482,7 @@ async function loadCashFlow() {
         datasets: [{
           label: 'Monto diario',
           data: montos,
-          backgroundColor: C.blueBg,
-          borderColor: C.blue,
-          borderWidth: 1,
+          backgroundColor: C.blueBg, borderColor: C.blue, borderWidth: 1,
         }],
       },
       options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: arsScale } },
@@ -313,12 +513,8 @@ async function loadMonthly() {
     document.getElementById('kpi-tickets').textContent = formatNum(totalTickets);
     document.getElementById('kpi-txns').textContent = formatNum(totalTxns);
 
-    const labels = data.map(r => {
-      const d = new Date(r.mes + 'T00:00:00');
-      return d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' });
-    });
+    const labels = data.map(r => formatMonth(r.mes));
 
-    // Revenue mensual stacked
     new Chart(document.getElementById('monthlyChart'), {
       type: 'bar',
       data: {
@@ -327,22 +523,19 @@ async function loadMonthly() {
           {
             label: 'Costo Ticket',
             data: data.map(r => Number(r.revenue_tickets)),
-            backgroundColor: C.greenBg,
-            borderColor: C.green,
+            backgroundColor: C.greenBg, borderColor: C.green,
             borderWidth: 1, borderRadius: 4,
           },
           {
             label: 'Costo SC',
             data: data.map(r => Number(r.revenue_sc)),
-            backgroundColor: C.cyanBg,
-            borderColor: C.cyan,
+            backgroundColor: C.cyanBg, borderColor: C.cyan,
             borderWidth: 1, borderRadius: 4,
           },
         ],
       },
       options: {
         ...chartDefaults,
-        plugins: { ...chartDefaults.plugins, },
         scales: {
           ...chartDefaults.scales,
           x: { ...chartDefaults.scales.x, stacked: true },
@@ -351,7 +544,6 @@ async function loadMonthly() {
       },
     });
 
-    // Breakdown chart: % ticket vs SC por mes
     new Chart(document.getElementById('breakdownChart'), {
       type: 'bar',
       data: {
@@ -360,14 +552,12 @@ async function loadMonthly() {
           {
             label: 'Costo Ticket',
             data: data.map(r => Number(r.revenue_tickets)),
-            backgroundColor: C.green,
-            borderRadius: 4,
+            backgroundColor: C.green, borderRadius: 4,
           },
           {
             label: 'Costo SC Neto',
             data: data.map(r => Number(r.revenue_sc)),
-            backgroundColor: C.cyan,
-            borderRadius: 4,
+            backgroundColor: C.cyan, borderRadius: 4,
           },
         ],
       },
@@ -375,11 +565,7 @@ async function loadMonthly() {
         ...chartDefaults,
         plugins: {
           ...chartDefaults.plugins,
-          tooltip: {
-            callbacks: {
-              label: ctx => `${ctx.dataset.label}: ${formatARS(ctx.raw)}`,
-            }
-          }
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${formatARS(ctx.raw)}` } }
         },
         scales: {
           ...chartDefaults.scales,
@@ -394,19 +580,17 @@ async function loadMonthly() {
   }
 }
 
-// ===================== TOP EVENTOS (v_unified_by_evento) =====================
+// ===================== TOP EVENTOS =====================
 let allEventos = [];
 
 async function loadTopEvents() {
   try {
     allEventos = await query('v_unified_by_evento?select=*&order=total_neto.desc&limit=100');
 
-    // KPI: eventos y productores
     const eventosAll = await query('v_unified_by_evento?select=evento&limit=1000');
     const productoresAll = await query('v_unified_by_productor?select=productor&limit=1000');
     document.getElementById('kpi-counts').textContent = `${formatNum(eventosAll.length)} / ${formatNum(productoresAll.length)}`;
 
-    // Tabla top 20
     const top20 = allEventos.slice(0, 20);
     let html = `<table><thead><tr>
       <th>#</th><th>Evento</th><th>Productor</th>
@@ -429,7 +613,6 @@ async function loadTopEvents() {
     html += '</tbody></table>';
     document.getElementById('events-table').innerHTML = html;
 
-    // Populate event selector
     const select = document.getElementById('event-select');
     allEventos.forEach(e => {
       const opt = document.createElement('option');
@@ -443,7 +626,7 @@ async function loadTopEvents() {
   }
 }
 
-// ===================== TOP PRODUCTORES (v_unified_by_productor) =====================
+// ===================== TOP PRODUCTORES =====================
 async function loadTopProductores() {
   try {
     const data = await query('v_unified_by_productor?select=*&order=total_neto.desc&limit=20');
@@ -489,14 +672,11 @@ async function loadEventDetail(eventName) {
 
   try {
     const encoded = encodeURIComponent(eventName);
-
-    // Get event summary from allEventos
     const evInfo = allEventos.find(e => e.evento === eventName);
 
-    // Get daily data directly from the table
     const data = await query(
       `unified_transactions?select=transaction_datetime,costo_ticket,costo_sc,total_transaccion,ticket_count` +
-      `&evento=eq.${encoded}&order=transaction_datetime.asc`
+      `&evento=eq.${encoded}&transaction_type=eq.SETTLEMENT&order=transaction_datetime.asc`
     );
 
     document.getElementById('ev-loading').style.display = 'none';
@@ -505,24 +685,18 @@ async function loadEventDetail(eventName) {
       return;
     }
 
-    // Aggregate by day
     const byDay = {};
     data.forEach(r => {
       const day = r.transaction_datetime.substring(0, 10);
-      if (!byDay[day]) byDay[day] = { ticket: 0, sc: 0, total: 0, tickets: 0 };
-      byDay[day].ticket += Number(r.costo_ticket);
-      byDay[day].sc += Number(r.costo_sc);
+      if (!byDay[day]) byDay[day] = { total: 0 };
       byDay[day].total += Number(r.total_transaccion);
-      byDay[day].tickets += Number(r.ticket_count);
     });
 
     const days = Object.keys(byDay).sort();
     const dailyTotals = days.map(d => byDay[d].total);
-    let cumulative = [];
-    let running = 0;
+    let cumulative = [], running = 0;
     for (const m of dailyTotals) { running += m; cumulative.push(running); }
 
-    // KPIs
     if (evInfo) {
       document.getElementById('ev-kpi-ticket').textContent = formatARS(evInfo.total_costo_ticket);
       document.getElementById('ev-kpi-sc').textContent = formatARS(evInfo.total_costo_sc);
@@ -534,7 +708,6 @@ async function loadEventDetail(eventName) {
     }
     document.getElementById('event-kpis').style.display = 'grid';
 
-    // Charts
     if (evCashChart) evCashChart.destroy();
     if (evDailyChart) evDailyChart.destroy();
 
@@ -543,8 +716,7 @@ async function loadEventDetail(eventName) {
       data: {
         labels: days,
         datasets: [{
-          label: 'Acumulado',
-          data: cumulative,
+          label: 'Acumulado', data: cumulative,
           borderColor: C.green, backgroundColor: C.greenBg,
           fill: true, tension: 0.3, pointRadius: 1, borderWidth: 2,
         }],
@@ -557,8 +729,7 @@ async function loadEventDetail(eventName) {
       data: {
         labels: days,
         datasets: [{
-          label: 'Monto diario',
-          data: dailyTotals,
+          label: 'Monto diario', data: dailyTotals,
           backgroundColor: C.blueBg, borderColor: C.blue,
           borderWidth: 1, borderRadius: 2,
         }],
@@ -575,11 +746,103 @@ document.getElementById('event-select').addEventListener('change', (e) => {
   loadEventDetail(e.target.value);
 });
 
+// ===================== RENDICION DE TRANSFERENCIAS =====================
+async function loadRendicion() {
+  try {
+    const [monthly, byBenef, byEvento] = await Promise.all([
+      query('v_rendicion_monthly?select=*&order=mes.asc'),
+      query('v_rendicion_by_beneficiario?select=*&order=total_transferido.desc'),
+      query('v_rendicion_by_evento?select=*&order=total_transferido.desc'),
+    ]);
+
+    document.getElementById('ren-loading').style.display = 'none';
+
+    const totalTransferido = byBenef.reduce((s, r) => s + Number(r.total_transferido || 0), 0);
+    const totalCount = byBenef.reduce((s, r) => s + Number(r.num_transferencias || 0), 0);
+
+    document.getElementById('ren-kpi-total').textContent = formatARS(totalTransferido);
+    document.getElementById('ren-kpi-total-sub').textContent = `en ${monthly.length} meses`;
+    document.getElementById('ren-kpi-count').textContent = formatNum(totalCount);
+    document.getElementById('ren-kpi-beneficiarios').textContent = formatNum(byBenef.length);
+    document.getElementById('ren-kpi-eventos').textContent = formatNum(byEvento.length);
+
+    // Chart: transferencias mensuales
+    new Chart(document.getElementById('renMonthlyChart'), {
+      type: 'bar',
+      data: {
+        labels: monthly.map(r => formatMonth(r.mes)),
+        datasets: [{
+          label: 'Total Transferido',
+          data: monthly.map(r => Number(r.total_transferido || 0)),
+          backgroundColor: C.redBg,
+          borderColor: C.red,
+          borderWidth: 1,
+          borderRadius: 4,
+        }],
+      },
+      options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: arsScale } },
+    });
+
+    // Tabla: por beneficiario
+    let htmlB = `<table><thead><tr>
+      <th>#</th>
+      <th>Beneficiario</th>
+      <th class="right">Transferencias</th>
+      <th class="right">Eventos</th>
+      <th class="right">Promedio</th>
+      <th class="right">Total Transferido</th>
+    </tr></thead><tbody>`;
+    byBenef.forEach((b, i) => {
+      htmlB += `<tr>
+        <td>${i + 1}</td>
+        <td>${b.beneficiario}</td>
+        <td class="right">${formatNum(b.num_transferencias)}</td>
+        <td class="right">${formatNum(b.num_eventos)}</td>
+        <td class="right">${formatARS(b.avg_transferencia)}</td>
+        <td class="right" style="color:#ef4444;font-weight:600">${formatARS(b.total_transferido)}</td>
+      </tr>`;
+    });
+    htmlB += '</tbody></table>';
+    document.getElementById('ren-beneficiarios-table').innerHTML = htmlB;
+
+    // Tabla: por evento (top 100)
+    const top = byEvento.slice(0, 100);
+    let htmlE = `<table><thead><tr>
+      <th>#</th>
+      <th>Evento</th>
+      <th>Beneficiario</th>
+      <th class="right">Transferencias</th>
+      <th class="right">Monto Abonado</th>
+      <th class="right">Monto Liquidacion</th>
+      <th class="right">Total Transferido</th>
+    </tr></thead><tbody>`;
+    top.forEach((e, i) => {
+      htmlE += `<tr>
+        <td>${i + 1}</td>
+        <td>${e.evento}</td>
+        <td style="color:#8b8b9a">${e.beneficiario}</td>
+        <td class="right">${formatNum(e.num_transferencias)}</td>
+        <td class="right">${formatARS(e.total_abonado)}</td>
+        <td class="right">${formatARS(e.total_liquidado)}</td>
+        <td class="right" style="color:#ef4444;font-weight:600">${formatARS(e.total_transferido)}</td>
+      </tr>`;
+    });
+    htmlE += '</tbody></table>';
+    document.getElementById('ren-eventos-table').innerHTML = htmlE;
+
+  } catch (e) {
+    document.getElementById('ren-loading').innerHTML =
+      `<span class="error">Error cargando rendicion: ${e.message}</span>`;
+  }
+}
+
 // Load all in parallel
+loadBalance();
 loadCashFlow();
 loadMonthly();
 loadTopEvents();
 loadTopProductores();
+loadRendicion();
 </script>
 </body>
 </html>
